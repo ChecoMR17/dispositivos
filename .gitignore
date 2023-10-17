@@ -1,0 +1,4 @@
+# Ignora la carpeta node_modules
+node_modules
+rs.js
+rs2.js

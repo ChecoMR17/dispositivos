@@ -1,0 +1,27 @@
+{
+  "name": "dispositivo",
+  "version": "1.0.0",
+  "description": "Configuracion y consulta de regidtros al plc",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Sergio Marcos Rodriguez",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^1.5.0",
+    "cron": "^2.4.3",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "geolocation": "^0.0.0",
+    "install": "^0.13.0",
+    "is-online": "^10.0.0",
+    "jsmodbus": "^4.0.6",
+    "luxon": "^3.4.3",
+    "moment": "^2.29.4",
+    "mqtt": "^5.0.5",
+    "mysql": "^2.18.1",
+    "npm": "^10.2.0",
+    "os-utils": "^0.0.14"
+  }
+}
