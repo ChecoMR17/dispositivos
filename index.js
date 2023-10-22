@@ -8,8 +8,9 @@ const net = require("net");
 
 let date = new Date();
 let sendData = {};
-var topicBase, mqttUrl, clientMQTT;
+var topicBase, mqttUrl, clientMQTT, count;
 const clientId = `equipoAsb:${Math.floor(Math.random() * (10000 - 1 + 1) + 1)}`;
+var sqlP = "SELECT * FROM `parametros` WHERE permiso<>'N' ORDER BY tipo ASC; ";
 const opcionesMqtt = {
   clientId: clientId,
   clean: true,
@@ -23,96 +24,40 @@ const updateDate = new cron.CronJob("0 */5 * * *", function () {
 });
 updateDate.start();
 
-let plc = (data) => {
-  const optionsPlc = {
-    host: data.plcHost,
-    port: data.plcPort,
-  };
-  //console.log(data);
-
+let consultaPlc = (data, clientPLC) => {
   topicBase = `asb/proyecto${data.folio}/${data.clave}`;
   mqttUrl = `ws://${data.mqttHost}:${data.mqttPort}/mqtt`;
   clientMQTT = mqtt.connect(mqttUrl, opcionesMqtt);
-  const socket = new net.Socket();
-  const clientPLC = new modbus.client.TCP(socket);
-  socket.connect(optionsPlc);
-  socket.on("connect", (err) => console.log("Conectado al PLC"));
 
-  socket.on("error", (err) => {
-    console.error("Error en el socket:", err);
-    //process.exit(0);
-  });
-  //console.log(topicBase);
+  // Insert a la base de datos.
+
+  setInterval(async () => {
+    try {
+      const resultP = await plc(sqlP, clientPLC, "S");
+      //console.log(resultP);
+    } catch (err) {
+      console.error("Error al consultar los parámetros:", err);
+    }
+  }, data.mysqlTime);
+
   clientMQTT.on("connect", () => {
     suscribirseATopico(clientMQTT, `${topicBase}/#`, async () => {
-      var sqlP = "SELECT * FROM parametros WHERE permiso<>'N'";
-      try {
-        const resultP = await sql(sqlP, []);
-        let listaParametros = resultP.data;
-        //console.log(listaParametros);
-        let status = socket.resume()._readableState.destroyed;
-        status ? socket.connect(optionsPlc) : "";
-        if (listaParametros.length > 0) {
-          setTimeout(() => {
-            Object.keys(listaParametros).forEach((key) => {
-              const fecha = `${date.getFullYear()}/${
-                date.getMonth() + 1
-              }/${date.getDate()}`;
-              const hora = `${date.getHours()}:${date.getMinutes()}:${date.getSeconds()}`;
-              const paramet = listaParametros[key];
-              if (paramet.tipo == "BIT") {
-                sendData = {
-                  fecha: fecha,
-                  hora: hora,
-                  Valor: "BIT",
-                };
-                publicarMensaje(
-                  clientMQTT,
-                  `${topicBase}/${paramet.nombre}`,
-                  JSON.stringify(sendData),
-                  () => {
-                    console.log("datos enviados");
-                  }
-                );
-              } else if (paramet.tipo == "FLOAT") {
-                sendData = {
-                  fecha: fecha,
-                  hora: hora,
-                  Valor: "FLOAT",
-                };
-                publicarMensaje(
-                  clientMQTT,
-                  `${topicBase}/${paramet.nombre}`,
-                  JSON.stringify(sendData),
-                  () => {
-                    console.log("datos enviados");
-                  }
-                );
-              } else {
-                sendData = {
-                  fecha: fecha,
-                  hora: hora,
-                  Valor: "INT",
-                };
-                publicarMensaje(
-                  clientMQTT,
-                  `${topicBase}/${paramet.nombre}`,
-                  JSON.stringify(sendData),
-                  () => {
-                    console.log("datos enviados");
-                  }
-                );
-              }
-            });
-          }, data.mqttTime);
-        } else {
-          console.log("No se encontraron parámetro");
-          process.exit(0);
+      setInterval(async () => {
+        try {
+          const resultP = await plc(sqlP, clientPLC, "N");
+          console.log(resultP);
+          publicarMensaje(
+            clientMQTT,
+            `${topicBase}/${data.nombre}`,
+            JSON.stringify(resultP),
+            () => {
+              console.log("datos enviados");
+            }
+          );
+        } catch (err) {
+          console.error("Error al consultar los parámetros:", err);
         }
-      } catch (err) {
-        console.log("Error al consultar los parámetro");
-        process.exit(0);
-      }
+      }, data.mqttTime);
     });
   });
 
@@ -180,6 +125,42 @@ let plc = (data) => {
         console.log("Error al consultar", error);
         process.exit(0);
       }
+    } else if (topic.includes(`${topicBase}/sql/query/on_off`)) {
+      accion = message.accion == "on" ? true : false;
+
+      clientPLC
+        .writeSingleCoil(message.Addr, accion)
+        .then((result) => {
+          const params = {
+            message: "success",
+            addr: message.Addr,
+            status: accion,
+          };
+          publicarMensaje(
+            clientMQTT,
+            `${topicBase}/sql/query/on_off/result`,
+            JSON.stringify(params),
+            () => {
+              console.log("datos enviados");
+            }
+          );
+        })
+        .catch(() => {
+          const params = {
+            message: "error",
+            addr: message.Addr,
+            status: accion,
+          };
+          publicarMensaje(
+            clientMQTT,
+            `${topicBase}/sql/query/on_off/result`,
+            JSON.stringify(params),
+            () => {
+              console.log("datos enviados");
+            }
+          );
+          console.error(arguments);
+        });
     }
   });
 
@@ -196,7 +177,16 @@ let plc = (data) => {
     console.log("Revisa tu conexión a internet");
   });
 };
-
+let plc = async (sqlP, clientPLC, save) => {
+  try {
+    const resultP = await sql(sqlP, []);
+    const listaParametros = resultP.data;
+    const datosObtenidos = await obtenerDatos(clientPLC, listaParametros, save);
+    console.log(datosObtenidos);
+  } catch (err) {
+    console.error("Error al consultar los parámetros:", err);
+  }
+};
 let suscribirseATopico = (clientMQTT, topic, callback) => {
   clientMQTT.subscribe(topic, (error) => {
     if (!error) {
@@ -223,29 +213,163 @@ let publicarMensaje = (clientMQTT, topic, data, callback) => {
   });
 };
 
-async function main() {
-  try {
-    const isOnline = await checkInternetConnection();
+let obtenerDatos = async (clientPLC, listaParametros, save) => {
+  const fecha = `${date.getFullYear()}/${
+    date.getMonth() + 1
+  }/${date.getDate()}`;
+  const hora = `${date.getHours()}:${date.getMinutes()}:${date.getSeconds()}`;
+  const sendArray = [];
 
-    if (isOnline) {
-      console.log("Conexión a Internet establecida.");
-      const query = `${process.env.dbcheckDatabaseQuery} = 'proyectoDB${process.env.numProyecto}'`;
-      const result = await sql(query, []);
-      if (result.data.length > 0) {
-        const sqlP = `select * from dispositivos where clave='${process.env.clave}'`;
-        const resultP = await sql(sqlP, []);
-        var resultDatos = resultP.data[0];
-        if (resultDatos.licencia != "" && date <= resultDatos.licencia) {
-          plc(resultDatos);
+  try {
+    if (listaParametros.length > 0) {
+      for (const paramet of listaParametros) {
+        let valor;
+        if (paramet.tipo === "BIT") {
+          valor = await leerRegistroBit(clientPLC, paramet.addr, 1);
+          //Validar si es aviso de falla
+          if (paramet.descripcion.includes("AVISOS FALLAS")) {
+            paramet.tipo = paramet.descripcion;
+          }
+        } else if (paramet.tipo === "FLOAT") {
+          valor = await leerRegistroFloat(clientPLC, paramet.addr, 2);
         } else {
-          throw new Error("Licencia invalida");
+          valor = await leerRegistroInt(clientPLC, paramet.Addr, 1);
         }
-      } else {
-        console.log("Base de datos no encontrada");
-        process.exit(0);
+
+        const sendData = {
+          idparametro: paramet.id,
+          fecha: fecha,
+          hora: hora,
+          addr: paramet.addr,
+          tipo: paramet.tipo,
+          valor: valor,
+          guardar: save,
+        };
+        if (save == "S") {
+          try {
+            const saveSql =
+              "INSERT INTO historial(parametro, valor, fecha, tipo) VALUES (?,?,?,?)";
+            const resultP = await sql(saveSql, [
+              paramet.id,
+              valor,
+              fecha,
+              paramet.tipo,
+            ]);
+          } catch (error) {
+            console.log(error);
+          }
+        }
+
+        sendArray.push(sendData);
       }
     } else {
-      console.log("No hay conexión a Internet.");
+      console.log("No se encontraron parámetros");
+    }
+
+    return sendArray;
+  } catch (err) {
+    console.error("Error al obtener datos:", err);
+    return sendArray;
+  }
+};
+
+let leerRegistroBit = (clientPLC, addr, cantidad) => {
+  return new Promise((resolve, reject) => {
+    clientPLC
+      .readCoils(addr, cantidad)
+      .then((resultPLC) => {
+        let valorBit = resultPLC.response._body._valuesAsArray[0];
+        resolve(valorBit);
+      })
+      .catch((error) => {
+        reject(error);
+      });
+  });
+};
+
+let leerRegistroFloat = (clientPLC, addr, cantidad) => {
+  return new Promise((resolve, reject) => {
+    clientPLC
+      .readHoldingRegisters(addr, cantidad)
+      .then((resultPLC) => {
+        let floatArray = resultPLC.response._body._valuesAsArray;
+
+        let buffer = Buffer.allocUnsafe(4);
+        buffer.writeUInt16BE(floatArray[0], 2);
+        buffer.writeUInt16BE(floatArray[1], 0);
+        let valorFloat = buffer.readFloatBE(0).toFixed(2);
+
+        resolve(valorFloat);
+      })
+      .catch((error) => {
+        reject(error);
+      });
+  });
+};
+
+let leerRegistroInt = (clientPLC, addr, cantidad) => {
+  return new Promise((resolve, reject) => {
+    clientPLC
+      .readHoldingRegisters(addr, cantidad)
+      .then((resultPLC) => {
+        let valorInt = resultPLC.response._body._valuesAsArray[0];
+        resolve(valorInt);
+      })
+      .catch((error) => {
+        reject(error);
+      });
+  });
+};
+
+async function main() {
+  const query = `${process.env.dbcheckDatabaseQuery} = 'proyectoDB${process.env.numProyecto}'`;
+
+  try {
+    const result = await sql(query, []);
+    if (result.data.length > 0) {
+      const sqlD = `select * from dispositivos where clave='${process.env.clave}'`;
+      const resultP = await sql(sqlD, []);
+      var resultDatos = resultP.data[0];
+
+      if (resultDatos.licencia != "" && date <= resultDatos.licencia) {
+        const optionsPlc = {
+          host: resultDatos.plcHost,
+          port: resultDatos.plcPort,
+        };
+        const socket = new net.Socket();
+        const clientPLC = new modbus.client.TCP(socket);
+        socket.connect(optionsPlc);
+        socket.on("connect", (err) => console.log("Conectado al PLC"));
+        socket.on("error", (err) => {
+          console.error("Error en el socket:", err);
+          process.exit(0);
+        });
+
+        let status = socket.resume()._readableState.destroyed;
+        status ? socket.connect(optionsPlc) : "";
+
+        const isOnline = await checkInternetConnection();
+        if (isOnline) {
+          consultaPlc(resultDatos, clientPLC);
+          console.log("Conexión a Internet establecida.");
+        } else {
+          console.log("No hay conexión a Internet.");
+          setInterval(async () => {
+            let status = socket.resume()._readableState.destroyed;
+            status ? socket.connect(optionsPlc) : "";
+            try {
+              const resultP = await plc(sqlP, clientPLC, "S");
+            } catch (err) {
+              console.error("Error al consultar los parámetros:", err);
+            }
+          }, resultDatos.mysqlTime);
+        }
+      } else {
+        throw new Error("Licencia invalida");
+      }
+    } else {
+      console.log("Base de datos no encontrada");
+      process.exit(0);
     }
   } catch (error) {
     console.error(error.message);

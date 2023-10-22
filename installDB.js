@@ -6,12 +6,11 @@ const global = require("./global");
 
 async function checkData() {
   try {
-    const response = await axios.get(
-      `${process.env.urlApi}/${process.env.numProyecto}/${process.env.clave}`
-    );
+    const apiD = `${process.env.urlApi}/${process.env.numProyecto}/${process.env.clave}`;
+    const response = await axios.get(apiD);
     return response.data;
   } catch (error) {
-    throw new Error("Error al consultar datos.");
+    throw new Error("Error al consultar dispositivo.", error);
   }
 }
 
@@ -22,7 +21,7 @@ async function checkParametros() {
     );
     return response.data;
   } catch (error) {
-    throw new Error("Error al consultar datos.");
+    throw new Error("Error al consultar parámetros.", error);
   }
 }
 
@@ -166,7 +165,7 @@ let insertarParametros = async () => {
     const sqlQ = `INSERT INTO parametros(idDB,dispositivo, tipo, addr, nombre, descripcion, permiso, um) VALUES (?,?,?,?,?,?,?,?)`;
     const params = [
       parametros.id,
-      parametros.dispositivo,
+      "1",
       parametros.tipo,
       parametros.addr,
       parametros.nombre,
@@ -200,12 +199,24 @@ async function main() {
     const dbCheckResult = await checkDataBase();
     console.log(dbCheckResult);
 
-    const dispositivoResult = await ingresarDispositivos();
+    let dispositivoResult;
+    if (Array.isArray(dbCheckResult)) {
+      dispositivoResult = await ingresarDispositivos();
+      console.log(dispositivoResult);
+    } else {
+      console.error(
+        "Error al verificar la base de datos. No se ingresará el dispositivo."
+      );
+    }
 
-    console.log(dispositivoResult);
-
-    const parametrosResult = await insertarParametros();
-    console.log(parametrosResult);
+    if (dispositivoResult === "Dispositivo ingresado") {
+      const parametrosResult = await insertarParametros();
+      console.log(parametrosResult);
+    } else {
+      console.error(
+        "Error al ingresar el dispositivo. No se insertarán los parámetros."
+      );
+    }
 
     console.log("Instalación finalizada");
     process.exit(1);
@@ -214,4 +225,7 @@ async function main() {
     process.exit(1);
   }
 }
+
 main();
+
+//DROP DATABASE proyectoDB41
