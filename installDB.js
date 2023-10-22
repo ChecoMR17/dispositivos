@@ -4,7 +4,7 @@ require("dotenv").config();
 const moment = require("moment");
 const global = require("./global");
 
-async function checkData() {
+let checkData = async () => {
   try {
     const apiD = `${process.env.urlApi}/${process.env.numProyecto}/${process.env.clave}`;
     const response = await axios.get(apiD);
@@ -12,9 +12,9 @@ async function checkData() {
   } catch (error) {
     throw new Error("Error al consultar dispositivo.", error);
   }
-}
+};
 
-async function checkParametros() {
+let checkParametros = async () => {
   try {
     const response = await axios.get(
       `${process.env.urlApi}/parametros/${process.env.numProyecto}/${process.env.clave}`
@@ -23,7 +23,7 @@ async function checkParametros() {
   } catch (error) {
     throw new Error("Error al consultar parámetros.", error);
   }
-}
+};
 
 const connectionDb = mysql.createConnection(global.dataOption);
 connectionDb.connect((error) => {
@@ -194,7 +194,7 @@ let insertarParametros = async () => {
   return Promise.all(promises);
 };
 
-async function main() {
+let main = async () => {
   try {
     const dbCheckResult = await checkDataBase();
     console.log(dbCheckResult);
@@ -224,7 +224,7 @@ async function main() {
     console.error(error);
     process.exit(1);
   }
-}
+};
 
 main();
 

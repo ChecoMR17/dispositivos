@@ -341,7 +341,7 @@ let leerRegistroInt = (clientPLC, addr, cantidad) => {
   });
 };
 
-async function main() {
+let main = async () => {
   const query = `${process.env.dbcheckDatabaseQuery} = 'proyectoDB${process.env.numProyecto}'`;
   try {
     const result = await sql(query, []);
@@ -396,5 +396,5 @@ async function main() {
     console.error(error.message);
     process.exit(0);
   }
-}
+};
 main();
