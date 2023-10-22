@@ -1,4 +1,4 @@
-const { checkInternetConnection } = require("./network");
+const { checkInternetConnection, caracteristicasD } = require("./network");
 const modbus = require("jsmodbus");
 const moment = require("moment");
 const { sql } = require("./db");
@@ -10,7 +10,7 @@ let date = new Date();
 let sendData = {};
 var topicBase, mqttUrl, clientMQTT, count;
 const clientId = `equipoAsb:${Math.floor(Math.random() * (10000 - 1 + 1) + 1)}`;
-var sqlP = "SELECT * FROM `parametros` WHERE permiso<>'N' ORDER BY tipo ASC; ";
+var sqlP = process.env.queryParametros;
 const opcionesMqtt = {
   clientId: clientId,
   clean: true,
@@ -37,6 +37,7 @@ let consultaPlc = (data, clientPLC) => {
       //console.log(resultP);
     } catch (err) {
       console.error("Error al consultar los parámetros:", err);
+      process.exit(0);
     }
   }, data.mysqlTime);
 
@@ -56,6 +57,7 @@ let consultaPlc = (data, clientPLC) => {
           );
         } catch (err) {
           console.error("Error al consultar los parámetros:", err);
+          process.exit(0);
         }
       }, data.mqttTime);
     });
@@ -79,8 +81,7 @@ let consultaPlc = (data, clientPLC) => {
           moment(message.licencia).format("YYYY-MM-DD HH:mm:ss"),
           message.id,
         ];
-        const sqlP =
-          "UPDATE dispositivos SET clave=?,mqttTime=?,mqttHost=?,mqttPort=?,plcHost=?,plcPort=?,mysqlTime=?,longitud=?,latitud=?,licencia=? WHERE idDB=?";
+        const sqlP = process.env.queryUpdateD;
         const result = await sql(sqlP, params);
         console.log(result);
         process.exit(0);
@@ -99,8 +100,7 @@ let consultaPlc = (data, clientPLC) => {
           message.um,
           message.id,
         ];
-        const sqlP =
-          "UPDATE parametros SET tipo=?,addr=?,nombre=?,descripcion=?,permiso=?,um=? WHERE idDB=?";
+        const sqlP = process.env.queryParametrosU;
         const result = await sql(sqlP, params);
         console.log(result);
         process.exit(0);
@@ -160,21 +160,35 @@ let consultaPlc = (data, clientPLC) => {
             }
           );
           console.error(arguments);
+          process.exit(0);
         });
+    } else if (topic.includes(`${topicBase}/detalles/dispositivo`)) {
+      publicarMensaje(
+        clientMQTT,
+        `${topicBase}/detalles/dispositivo/result`,
+        JSON.stringify(caracteristicasD()),
+        () => {
+          console.log("datos enviados");
+        }
+      );
     }
   });
 
   clientMQTT.on("disconnect", () => {
     console.log("Desconectado");
+    process.exit(0);
   });
   clientMQTT.on("reconnect", () => {
     console.log("Reconectando");
+    process.exit(0);
   });
   clientMQTT.on("error", () => {
     console.log("Error al conectar");
+    process.exit(0);
   });
   clientMQTT.on("offline", () => {
     console.log("Revisa tu conexión a internet");
+    process.exit(0);
   });
 };
 let plc = async (sqlP, clientPLC, save) => {
@@ -185,6 +199,7 @@ let plc = async (sqlP, clientPLC, save) => {
     console.log(datosObtenidos);
   } catch (err) {
     console.error("Error al consultar los parámetros:", err);
+    process.exit(0);
   }
 };
 let suscribirseATopico = (clientMQTT, topic, callback) => {
@@ -196,6 +211,7 @@ let suscribirseATopico = (clientMQTT, topic, callback) => {
       }
     } else {
       console.log(`Error al suscribirse a ${topic}`, error);
+      process.exit(0);
     }
   });
 };
@@ -209,6 +225,7 @@ let publicarMensaje = (clientMQTT, topic, data, callback) => {
       }
     } else {
       console.log(`Error al publicar mensaje en ${topic}`, error);
+      process.exit(0);
     }
   });
 };
@@ -257,6 +274,7 @@ let obtenerDatos = async (clientPLC, listaParametros, save) => {
             ]);
           } catch (error) {
             console.log(error);
+            process.exit(0);
           }
         }
 
@@ -264,12 +282,14 @@ let obtenerDatos = async (clientPLC, listaParametros, save) => {
       }
     } else {
       console.log("No se encontraron parámetros");
+      process.exit(0);
     }
 
     return sendArray;
   } catch (err) {
     console.error("Error al obtener datos:", err);
     return sendArray;
+    process.exit(0);
   }
 };
 
@@ -323,7 +343,6 @@ let leerRegistroInt = (clientPLC, addr, cantidad) => {
 
 async function main() {
   const query = `${process.env.dbcheckDatabaseQuery} = 'proyectoDB${process.env.numProyecto}'`;
-
   try {
     const result = await sql(query, []);
     if (result.data.length > 0) {
@@ -361,11 +380,13 @@ async function main() {
               const resultP = await plc(sqlP, clientPLC, "S");
             } catch (err) {
               console.error("Error al consultar los parámetros:", err);
+              process.exit(0);
             }
           }, resultDatos.mysqlTime);
         }
       } else {
         throw new Error("Licencia invalida");
+        process.exit(0);
       }
     } else {
       console.log("Base de datos no encontrada");
@@ -373,6 +394,7 @@ async function main() {
     }
   } catch (error) {
     console.error(error.message);
+    process.exit(0);
   }
 }
 main();

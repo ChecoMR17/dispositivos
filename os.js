@@ -1,9 +1,0 @@
-const os = require("os");
-const totalMemoryGB = (os.totalmem() / (1024 * 1024 * 1024)).toFixed(2);
-const freeMemoryGB = (os.freemem() / (1024 * 1024 * 1024)).toFixed(2);
-const totalDiskGB = (os.totalmem() / (1024 * 1024 * 1024)).toFixed(2);
-const freeDiskGB = (os.freemem() / (1024 * 1024 * 1024)).toFixed(2);
-const usedDiskGB = (totalDiskGB - freeDiskGB).toFixed(2);
-const numCores = os.cpus().length;
-const cpuModel = os.cpus()[0].model;
-const cpuSpeed = os.cpus()[0].speed;
