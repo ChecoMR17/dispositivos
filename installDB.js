@@ -65,6 +65,7 @@ let checkDataBase = () => {
                 return "Tabla creada";
               })
               .catch((error) => {
+                console.log(error);
                 throw new Error("Error al crear la tabla", error);
               });
           });
