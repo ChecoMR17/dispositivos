@@ -1,4 +1,4 @@
-const mysql = require("mysql");
+const mysql = require("mysql2");
 const axios = require("axios");
 require("dotenv").config();
 const moment = require("moment");
@@ -227,5 +227,3 @@ let main = async () => {
 };
 
 main();
-
-//DROP DATABASE proyectoDB41

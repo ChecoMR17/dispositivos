@@ -1,5 +1,5 @@
 const global = require("./global");
-const mysql = require("mysql");
+const mysql = require("mysql2");
 require("dotenv").config();
 
 global.dataOption.database = `proyectoDB${process.env.numProyecto}`;
